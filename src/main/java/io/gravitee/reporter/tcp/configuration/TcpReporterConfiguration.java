@@ -24,7 +24,7 @@ import org.springframework.beans.factory.annotation.Value;
  */
 public class TcpReporterConfiguration {
 
-  @Value("${reporters.tcp.enabled:true}")
+  @Value("${reporters.tcp.enabled:false}")
   private boolean enabled;
 
   @Value("${reporters.tcp.output:json}")

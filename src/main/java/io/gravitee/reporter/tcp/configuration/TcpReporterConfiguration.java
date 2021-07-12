@@ -15,14 +15,23 @@
  */
 package io.gravitee.reporter.tcp.configuration;
 
+import io.gravitee.common.util.EnvironmentUtils;
+import io.gravitee.reporter.api.configuration.Rules;
+import io.gravitee.reporter.tcp.MetricsType;
 import io.gravitee.reporter.tcp.formatter.Type;
+import java.util.*;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.ConfigurableEnvironment;
 
 /**
  * @author David BRASSELY (david.brassely at graviteesource.com)
  * @author GraviteeSource Team
  */
 public class TcpReporterConfiguration {
+
+  private static final String TCP_REPORTER_PREFIX = "reporters.tcp.";
 
   @Value("${reporters.tcp.output:json}")
   private String outputType;
@@ -47,6 +56,9 @@ public class TcpReporterConfiguration {
 
   @Value("${reporters.tcp.reconnectInterval:500}")
   private long reconnectInterval;
+
+  @Autowired
+  private ConfigurableEnvironment environment;
 
   public boolean isEnabled() {
     return enabled;
@@ -80,5 +92,84 @@ public class TcpReporterConfiguration {
 
   public long getReconnectInterval() {
     return reconnectInterval;
+  }
+
+  public Rules getRules(MetricsType type) {
+    Rules rules = new Rules();
+
+    if (
+      environment.containsProperty(
+        TCP_REPORTER_PREFIX + type.getType() + ".rename"
+      )
+    ) {
+      rules.setRenameFields(
+        getMapProperties(TCP_REPORTER_PREFIX + type.getType() + "rename")
+      );
+    }
+
+    if (
+      environment.containsProperty(
+        TCP_REPORTER_PREFIX + type.getType() + "exclude"
+      )
+    ) {
+      List<String> excludingRules = getArrayProperties(
+        TCP_REPORTER_PREFIX + type.getType() + "exclude"
+      );
+      rules.setExcludeFields(new HashSet<>(excludingRules));
+    }
+
+    if (
+      environment.containsProperty(
+        TCP_REPORTER_PREFIX + type.getType() + "include"
+      )
+    ) {
+      List<String> includingRules = getArrayProperties(
+        TCP_REPORTER_PREFIX + type.getType() + "include"
+      );
+      rules.setIncludeFields(new HashSet<>(includingRules));
+    }
+
+    return rules;
+  }
+
+  private Map<String, String> getMapProperties(String prefix) {
+    Map<String, Object> properties = EnvironmentUtils.getPropertiesStartingWith(
+      environment,
+      prefix
+    );
+    if (!properties.isEmpty()) {
+      return properties
+        .entrySet()
+        .stream()
+        .collect(
+          Collectors.toMap(
+            entry ->
+              EnvironmentUtils
+                .encodedKey(entry.getKey())
+                .substring(EnvironmentUtils.encodedKey(prefix).length()),
+            entry -> entry.getValue().toString()
+          )
+        );
+    } else {
+      return Collections.emptyMap();
+    }
+  }
+
+  private List<String> getArrayProperties(String prefix) {
+    List<String> properties = new ArrayList<>();
+
+    boolean found = true;
+    int idx = 0;
+
+    while (found) {
+      String property = environment.getProperty(prefix + '[' + idx + ']');
+      found = (property != null && property.isEmpty());
+
+      if (found) {
+        properties.add(property);
+      }
+    }
+
+    return properties;
   }
 }
